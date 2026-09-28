@@ -31,25 +31,11 @@ export default async function Page() {
     return (
         <main className="min-h-screen bg-[#f7f6f2] text-black">
 
-            {/* NAV */}
-            <nav className="border-b border-black">
-                <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-10">
-                    <h1 className="text-xl font-bold tracking-tight">
-                        POPUP.NYC
-                    </h1>
-
-                    <p className="text-xs uppercase tracking-[0.2em]">
-                        New York / 2026
-                    </p>
-                </div>
-            </nav>
-
-
             {/* HERO */}
             <section className="mx-auto max-w-7xl px-6 pb-20 pt-20 md:px-10 md:pb-28 md:pt-28">
 
                 <p className="mb-8 text-xs uppercase tracking-[0.25em]">
-                    The city's temporary guide
+                    The city&apos;s temporary guide
                 </p>
 
                 <h2 className="max-w-5xl text-6xl font-medium leading-[0.9] tracking-[-0.05em] md:text-8xl lg:text-9xl">
@@ -222,12 +208,7 @@ export default async function Page() {
             {/* FOOTER */}
             <footer className="mt-20 border-t border-black">
 
-                <div className="mx-auto flex max-w-7xl justify-between px-6 py-8 text-[10px] uppercase tracking-[0.18em] md:px-10">
-
-          <span>
-            POPUP.NYC
-          </span>
-
+                <div className="mx-auto flex max-w-7xl justify-end px-6 py-8 text-[10px] uppercase tracking-[0.18em] md:px-10">
                     <span>
             New York City
           </span>
