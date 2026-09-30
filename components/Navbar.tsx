@@ -4,9 +4,8 @@ import SignOutButton from "./SignOutButton";
 
 export default async function Navbar() {
     const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
+    const { data } = await supabase.auth.getClaims();
+    const isAuthenticated = Boolean(data?.claims?.sub);
 
     return (
         <header className="site-header">
@@ -17,7 +16,7 @@ export default async function Navbar() {
 
                 <nav className="site-nav" aria-label="Primary navigation">
                     <Link href="/">Explore</Link>
-                    {user ? (
+                    {isAuthenticated ? (
                         <>
                             <Link href="/saved">Saved</Link>
                             <Link href="/profile">Profile</Link>
