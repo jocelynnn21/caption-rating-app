@@ -1,12 +1,50 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url);
     const code = searchParams.get("code");
+    let authResponse = NextResponse.next({ request });
+
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+        {
+            cookies: {
+                getAll() {
+                    return request.cookies.getAll();
+                },
+                setAll(cookiesToSet, headers) {
+                    cookiesToSet.forEach(({ name, value }) =>
+                        request.cookies.set(name, value)
+                    );
+
+                    authResponse = NextResponse.next({ request });
+
+                    cookiesToSet.forEach(({ name, value, options }) =>
+                        authResponse.cookies.set(name, value, options)
+                    );
+
+                    Object.entries(headers).forEach(([key, value]) =>
+                        authResponse.headers.set(key, value)
+                    );
+                },
+            },
+        }
+    );
 
     const redirect = (path: string) => {
         const response = NextResponse.redirect(`${origin}${path}`, 303);
+
+        authResponse.cookies.getAll().forEach((cookie) =>
+            response.cookies.set(cookie)
+        );
+
+        for (const header of ["expires", "pragma"]) {
+            const value = authResponse.headers.get(header);
+            if (value) response.headers.set(header, value);
+        }
+
         response.headers.set("Cache-Control", "private, no-store, max-age=0");
         return response;
     };
@@ -14,8 +52,6 @@ export async function GET(request: Request) {
     if (!code) {
         return redirect("/auth/auth-code-error");
     }
-
-    const supabase = await createClient();
 
     const { data: authData, error: exchangeError } =
         await supabase.auth.exchangeCodeForSession(code);
