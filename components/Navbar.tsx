@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import SignOutButton from "./SignOutButton";
+import AuthNav from "./AuthNav";
 
 export default async function Navbar() {
     const supabase = await createClient();
@@ -14,18 +14,7 @@ export default async function Navbar() {
                     POPUP.NYC
                 </Link>
 
-                <nav className="site-nav" aria-label="Primary navigation">
-                    <Link href="/">Explore</Link>
-                    {isAuthenticated ? (
-                        <>
-                            <Link href="/saved">Saved</Link>
-                            <Link href="/profile">Profile</Link>
-                            <SignOutButton />
-                        </>
-                    ) : (
-                        <Link href="/login">Sign in</Link>
-                    )}
-                </nav>
+                <AuthNav initialIsAuthenticated={isAuthenticated} />
             </div>
         </header>
     );
