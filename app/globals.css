@@ -156,7 +156,7 @@ main p {
   content: "";
   position: absolute;
   right: 0;
-  bottom: -1.35rem;
+  bottom: 0.5rem;
   left: 0;
   height: 2px;
   background: currentColor;
