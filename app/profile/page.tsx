@@ -1,9 +1,11 @@
 "use client";
 
 import { ChangeEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ProfilePage() {
+    const router = useRouter();
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export default function ProfilePage() {
             } = await supabase.auth.getUser();
 
             if (!user) {
-                window.location.href = "/login";
+                router.replace("/login?next=/profile");
                 return;
             }
 
@@ -34,6 +36,7 @@ export default function ProfilePage() {
 
             if (error) {
                 console.error("Error loading profile:", error);
+                setMessage("Could not load your profile. Try refreshing the page.");
             }
 
             if (profile) {
@@ -46,7 +49,7 @@ export default function ProfilePage() {
         };
 
         loadProfile();
-    }, []);
+    }, [router]);
 
     const saveProfile = async () => {
         setMessage("");
@@ -59,7 +62,7 @@ export default function ProfilePage() {
         } = await supabase.auth.getUser();
 
         if (!user) {
-            window.location.href = "/login";
+            router.replace("/login?next=/profile");
             return;
         }
 
@@ -87,6 +90,19 @@ export default function ProfilePage() {
 
         if (!file) return;
 
+        const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+        if (!allowedTypes.includes(file.type)) {
+            setMessage("Choose a JPG, PNG, or WebP image.");
+            event.target.value = "";
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setMessage("Choose an image smaller than 5 MB.");
+            event.target.value = "";
+            return;
+        }
+
         setUploading(true);
         setMessage("");
 
@@ -96,14 +112,8 @@ export default function ProfilePage() {
             data: { user },
         } = await supabase.auth.getUser();
 
-        const { data: sessionData } = await supabase.auth.getSession();
-
-        console.log("USER ID:", user?.id);
-        console.log("HAS SESSION:", !!sessionData.session);
-        console.log("USER ROLE:", sessionData.session?.user?.role);
-
         if (!user) {
-            window.location.href = "/login";
+            router.replace("/login?next=/profile");
             return;
         }
 
@@ -163,34 +173,30 @@ export default function ProfilePage() {
         <main className="min-h-screen bg-[#f7f6f2] text-black">
             <div className="mx-auto max-w-7xl px-6 py-16 md:px-10 md:py-24">
                 <header className="border-b border-black pb-10 md:pb-14">
-                    <p className="mb-5 text-xs font-medium uppercase tracking-[0.22em]">
-                        Account / Profile
-                    </p>
-                    <h1 className="text-6xl font-medium leading-none tracking-[-0.055em] md:text-8xl">
+                    <h1 className="text-[3.25rem] font-medium leading-none tracking-[-0.04em] md:text-8xl">
                         Your profile
                     </h1>
                 </header>
 
                 <div className="grid gap-14 py-12 md:grid-cols-2 md:gap-20 md:py-16">
                     <section aria-labelledby="profile-photo-heading">
-                        <div className="mb-5 flex items-end justify-between border-b border-neutral-400 pb-3">
+                        <div className="mb-5 border-b border-neutral-400 pb-3">
                             <h2
                                 id="profile-photo-heading"
                                 className="text-xs font-semibold uppercase tracking-[0.18em]"
                             >
                                 Profile photo
                             </h2>
-                            <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-                                01
-                            </span>
                         </div>
 
                         <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-neutral-200">
                             {avatarUrl ? (
+                                // Supabase public URLs are user-provided and not configured for Next image optimization.
+                                // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                     src={avatarUrl}
                                     alt="Your profile"
-                                    className="h-full w-full object-cover"
+                                    className="h-full w-full object-cover outline outline-1 -outline-offset-1 outline-black/10"
                                 />
                             ) : (
                                 <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">
@@ -201,11 +207,11 @@ export default function ProfilePage() {
 
                         <div className="mt-5 flex items-center justify-between gap-4">
                             <p className="text-xs leading-5 text-neutral-500">
-                                JPG, PNG, or WebP
+                                JPG, PNG, or WebP · 5 MB max
                             </p>
                             <label
                                 htmlFor="avatar-upload"
-                                className={`inline-flex cursor-pointer items-center border-b border-black pb-1 text-xs font-semibold uppercase tracking-[0.15em] transition-opacity hover:opacity-50 ${
+                                className={`inline-flex min-h-11 cursor-pointer items-center border-b border-black text-xs font-semibold uppercase tracking-[0.15em] transition-opacity hover:opacity-50 ${
                                     uploading ? "pointer-events-none opacity-40" : ""
                                 }`}
                             >
@@ -214,7 +220,7 @@ export default function ProfilePage() {
                             <input
                                 id="avatar-upload"
                                 type="file"
-                                accept="image/*"
+                                accept="image/jpeg,image/png,image/webp"
                                 onChange={uploadAvatar}
                                 disabled={uploading}
                                 className="sr-only"
@@ -223,23 +229,20 @@ export default function ProfilePage() {
                     </section>
 
                     <section aria-labelledby="personal-details-heading">
-                        <div className="mb-5 flex items-end justify-between border-b border-neutral-400 pb-3">
+                        <div className="mb-5 border-b border-neutral-400 pb-3">
                             <h2
                                 id="personal-details-heading"
                                 className="text-xs font-semibold uppercase tracking-[0.18em]"
                             >
                                 Personal details
                             </h2>
-                            <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-                                02
-                            </span>
                         </div>
 
                         <div className="space-y-10 pt-3">
                             <div>
                                 <label
                                     htmlFor="first-name"
-                                    className="block text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-500"
+                                    className="block text-xs font-medium uppercase tracking-[0.16em] text-neutral-600"
                                 >
                                     First name
                                 </label>
@@ -248,6 +251,7 @@ export default function ProfilePage() {
                                     type="text"
                                     autoComplete="given-name"
                                     value={firstName}
+                                    maxLength={80}
                                     onChange={(event) => setFirstName(event.target.value)}
                                     className="mt-3 w-full border-0 border-b border-black bg-transparent px-0 pb-3 text-2xl tracking-[-0.02em] outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-500 md:text-3xl"
                                 />
@@ -256,7 +260,7 @@ export default function ProfilePage() {
                             <div>
                                 <label
                                     htmlFor="last-name"
-                                    className="block text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-500"
+                                    className="block text-xs font-medium uppercase tracking-[0.16em] text-neutral-600"
                                 >
                                     Last name
                                 </label>
@@ -265,6 +269,7 @@ export default function ProfilePage() {
                                     type="text"
                                     autoComplete="family-name"
                                     value={lastName}
+                                    maxLength={80}
                                     onChange={(event) => setLastName(event.target.value)}
                                     className="mt-3 w-full border-0 border-b border-black bg-transparent px-0 pb-3 text-2xl tracking-[-0.02em] outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-500 md:text-3xl"
                                 />
@@ -276,7 +281,7 @@ export default function ProfilePage() {
                                 type="button"
                                 onClick={saveProfile}
                                 disabled={saving}
-                                className="bg-black px-7 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[#f7f6f2] transition-opacity hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="bg-black px-7 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[#f7f6f2] transition-[scale,opacity] duration-150 ease-out hover:opacity-70 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 {saving ? "Saving…" : "Save profile"}
                             </button>

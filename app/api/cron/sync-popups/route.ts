@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getNewYorkDate } from "@/lib/daily-drops";
-import { scrapePopupSources } from "@/lib/popup-scrapers";
+import { scrapePopupImage, scrapePopupSources } from "@/lib/popup-scrapers";
 
 export const maxDuration = 60;
 
@@ -57,15 +57,48 @@ export async function GET(request: Request) {
             throw new Error(`Supabase archive failed: ${archiveError.message}`);
         }
 
+        const { data: missingImages, error: missingImagesError } = await admin
+            .from("popups")
+            .select("id, source_url")
+            .eq("is_active", true)
+            .is("image_url", null)
+            .not("source_url", "is", null)
+            .limit(20);
+
+        if (missingImagesError) {
+            throw new Error(`Supabase image lookup failed: ${missingImagesError.message}`);
+        }
+
+        const imageUpdates = await Promise.all(
+            (missingImages ?? []).map(async (popup) => {
+                try {
+                    const imageUrl = await scrapePopupImage(popup.source_url);
+                    if (!imageUrl) return false;
+                    const { error } = await admin
+                        .from("popups")
+                        .update({ image_url: imageUrl })
+                        .eq("id", popup.id);
+                    if (error) throw error;
+                    return true;
+                } catch (error) {
+                    console.warn("Popup image backfill skipped:", popup.source_url, error);
+                    return false;
+                }
+            })
+        );
+        const imagesBackfilled = imageUpdates.filter(Boolean).length;
+
         revalidatePath("/");
         console.info("Popup sync completed.", {
             scraped: events.length,
+            imagesBackfilled,
             sources: [...new Set(events.map((event) => event.source_provider))],
         });
 
         return NextResponse.json({
             ok: true,
             synced: events.length,
+            imagesBackfilled,
             sources: [...new Set(events.map((event) => event.source_provider))],
         });
     } catch (error) {

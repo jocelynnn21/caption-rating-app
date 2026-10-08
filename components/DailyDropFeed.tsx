@@ -36,7 +36,7 @@ export default function DailyDropFeed({
     const vote = async (value: -1 | 1) => {
         if (!activeDrop) return;
         if (!isAuthenticated) {
-            router.push("/login");
+            router.push("/login?next=/lab");
             return;
         }
 
@@ -73,16 +73,16 @@ export default function DailyDropFeed({
 
     const revealDrop = async () => {
         if (!isAuthenticated) {
-            router.push("/login");
+            router.push("/login?next=/lab");
             return;
         }
 
-        setGenerating(true);
         setMessage("");
         if (remainingGenerations === 0) {
             setMessage("You generated today’s five. Come back tomorrow for five more.");
             return;
         }
+        setGenerating(true);
 
         const revealCount = remainingGenerations;
         const response = await fetch("/api/generations", {
@@ -135,7 +135,7 @@ export default function DailyDropFeed({
                             : `Generate today’s ${remainingGenerations}`}
                     </button>
                 ) : (
-                    <Link href="/login">Sign in to reveal it</Link>
+                    <Link href="/login?next=/lab">Sign in to reveal it</Link>
                 )}
                 {message && <p className="drop-status" role="status">{message}</p>}
             </section>
@@ -180,7 +180,7 @@ export default function DailyDropFeed({
 
                     {!isAuthenticated && (
                         <p className="drop-signin-note">
-                            <Link href="/login">Sign in</Link> to cast your vote.
+                            <Link href="/login?next=/lab">Sign in</Link> to cast your vote.
                         </p>
                     )}
 

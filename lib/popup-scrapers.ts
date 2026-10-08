@@ -64,6 +64,101 @@ function getMeta(html: string, key: string) {
     return tag ? getTagAttribute(tag, "content") : "";
 }
 
+function normalizeImageUrl(value: string, baseUrl: string) {
+    if (!value || value.startsWith("data:")) return null;
+
+    try {
+        const url = new URL(decodeHtml(value), baseUrl);
+        if (!/^https?:$/.test(url.protocol)) return null;
+        if (/logo|icon|avatar|pixel|spacer|blank|placeholder|property_asset|doubleclick|trackimp/i.test(url.pathname)) return null;
+        return url.toString();
+    } catch {
+        return null;
+    }
+}
+
+function collectJsonLdImages(value: unknown, images: string[]) {
+    if (Array.isArray(value)) {
+        value.forEach((item) => collectJsonLdImages(item, images));
+        return;
+    }
+    if (!value || typeof value !== "object") return;
+
+    for (const [key, child] of Object.entries(value)) {
+        if (key === "image") {
+            if (typeof child === "string") images.push(child);
+            if (Array.isArray(child)) {
+                child.forEach((item) => {
+                    if (typeof item === "string") images.push(item);
+                    else if (item && typeof item === "object" && "url" in item && typeof item.url === "string") {
+                        images.push(item.url);
+                    }
+                });
+            }
+            if (child && typeof child === "object" && "url" in child && typeof child.url === "string") {
+                images.push(child.url);
+            }
+        }
+        collectJsonLdImages(child, images);
+    }
+}
+
+function getBestImage(html: string, baseUrl: string) {
+    const candidates: string[] = [];
+
+    for (const key of ["og:image:secure_url", "og:image", "twitter:image"]) {
+        const value = getMeta(html, key);
+        if (value) candidates.push(value);
+    }
+
+    const jsonLdScripts = html.match(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) ?? [];
+    for (const script of jsonLdScripts) {
+        const raw = script.replace(/^<script\b[^>]*>/i, "").replace(/<\/script>$/i, "").trim();
+        try {
+            collectJsonLdImages(JSON.parse(raw), candidates);
+        } catch {
+            // Some publishers ship invalid JSON-LD. Other image sources still work.
+        }
+    }
+
+    const imageTags = html.match(/<img\b[^>]*>/gi) ?? [];
+    for (const tag of imageTags) {
+        const itemProp = getTagAttribute(tag, "itemprop").toLowerCase();
+        const className = getTagAttribute(tag, "class").toLowerCase();
+        const isLikelyEventImage = itemProp === "image" || /event|hero|cover|featured/.test(className);
+        if (!isLikelyEventImage) continue;
+
+        for (const attribute of ["data-src", "data-lazy-src", "src"]) {
+            const value = getTagAttribute(tag, attribute);
+            if (value) candidates.push(value);
+        }
+        const srcset = getTagAttribute(tag, "srcset");
+        if (srcset) {
+            const largest = srcset.split(",").at(-1)?.trim().split(/\s+/)[0];
+            if (largest) candidates.push(largest);
+        }
+    }
+
+    const visualTags = html.match(/<[a-z0-9]+\b[^>]*(?:class=["'][^"']*(?:event|hero|cover|featured)[^"']*["']|itemprop=["']image["'])[^>]*>/gi) ?? [];
+    for (const tag of visualTags) {
+        const style = getTagAttribute(tag, "style");
+        const backgroundImage = style.match(/background-image\s*:\s*url\(["']?([^"')]+)["']?\)/i)?.[1];
+        if (backgroundImage) candidates.push(backgroundImage);
+
+        for (const attribute of ["data-background", "data-bg", "data-image", "data-src"]) {
+            const value = getTagAttribute(tag, attribute);
+            if (value) candidates.push(value);
+        }
+    }
+
+    for (const candidate of candidates) {
+        const normalized = normalizeImageUrl(candidate, baseUrl);
+        if (normalized) return normalized;
+    }
+
+    return null;
+}
+
 function getEventData(html: string, key: string) {
     const match = html.match(new RegExp(
         `<([a-z0-9]+)[^>]*event-data=["']${key}["'][^>]*>([\\s\\S]*?)<\\/\\1>`,
@@ -175,7 +270,7 @@ async function scrapeNycForFree(
             start_date: startDate, end_date: endDate,
             category: inferCategory(`${sourceCategory} ${name} ${description}`),
             price: /\bfree\b/i.test(description) ? "Free" : "See source",
-            image_url: getMeta(html, "og:image") || null,
+            image_url: getBestImage(html, sourceUrl),
             source_url: sourceUrl,
             source_key: createSourceKey(sourceUrl),
             source_provider: "nycforfree" as const,
@@ -224,7 +319,7 @@ async function scrapeVipSampleSale(
             end_date: dateRange.end,
             category: "Fashion" as const,
             price: "See source",
-            image_url: getMeta(html, "og:image") || null,
+            image_url: getBestImage(html, sourceUrl),
             source_url: sourceUrl,
             source_key: createSourceKey(sourceUrl),
             source_provider: "vipsamplesale" as const,
@@ -233,6 +328,22 @@ async function scrapeVipSampleSale(
             is_active: true as const,
         };
     });
+}
+
+const imageBackfillHosts = new Set([
+    "donyc.com",
+    "www.donyc.com",
+    "nycforfree.co",
+    "www.nycforfree.co",
+    "vipsamplesale.com",
+    "www.vipsamplesale.com",
+]);
+
+export async function scrapePopupImage(sourceUrl: string) {
+    const url = new URL(sourceUrl);
+    if (!imageBackfillHosts.has(url.hostname)) return null;
+    const html = await fetchHtml(url.toString());
+    return getBestImage(html, url.toString());
 }
 
 export async function scrapePopupSources(today: string) {

@@ -53,13 +53,14 @@ export async function GET(request: NextRequest) {
         response.headers.set("Cache-Control", "private, no-store, max-age=0");
         return response;
     };
+    const loginErrorPath = `/login?error=oauth&next=${encodeURIComponent(next)}`;
 
     if (!code) {
         const {
             data: { user: existingUser },
         } = await supabase.auth.getUser();
 
-        return redirect(existingUser ? next : "/auth/auth-code-error");
+        return redirect(existingUser ? next : loginErrorPath);
     }
 
     const { data: authData, error: exchangeError } =
@@ -71,13 +72,13 @@ export async function GET(request: NextRequest) {
             data: { user: existingUser },
         } = await supabase.auth.getUser();
 
-        return redirect(existingUser ? next : "/auth/auth-code-error");
+        return redirect(existingUser ? next : loginErrorPath);
     }
 
     const user = authData.user;
 
     if (!user) {
-        return redirect("/login");
+        return redirect(loginErrorPath);
     }
 
     const { data: profile } = await supabase
