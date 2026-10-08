@@ -18,6 +18,16 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+::selection {
+  background: #111111;
+  color: #f7f6f2;
+}
+
+:focus-visible {
+  outline: 2px solid #111111;
+  outline-offset: 4px;
+}
+
 /* =========================
    Editorial Navigation
    ========================= */
@@ -84,6 +94,391 @@ body {
   color: #000;
 }
 
+/* =========================
+   Daily Drop
+   ========================= */
+
+.lab-page {
+  min-height: calc(100vh - 68px);
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.lab-intro,
+.drop-stage,
+.drop-empty,
+.lab-setup {
+  width: min(100% - 3rem, 80rem);
+  margin-inline: auto;
+}
+
+.lab-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(18rem, 0.45fr);
+  gap: 4rem;
+  align-items: end;
+  padding: 5rem 0 4.5rem;
+}
+
+.lab-intro h1 {
+  max-width: 11ch;
+  font-size: clamp(4rem, 8.5vw, 6rem);
+  font-weight: 500;
+  line-height: 0.88;
+  letter-spacing: -0.04em;
+}
+
+.lab-intro-copy p {
+  max-width: 31rem;
+  color: #55524d;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.drop-stage {
+  padding-bottom: 7rem;
+}
+
+.drop-feature {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  min-height: 39rem;
+  border-top: 1px solid var(--foreground);
+  border-bottom: 1px solid var(--foreground);
+}
+
+.drop-fiction-label {
+  position: absolute;
+  z-index: 2;
+  top: 1.5rem;
+  right: 1.5rem;
+  margin: 0;
+  border: 1px solid currentColor;
+  padding: 0.45rem 0.55rem;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.drop-poster {
+  position: relative;
+  display: flex;
+  min-height: 39rem;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: 2rem;
+  background: #111111;
+  color: #f7f6f2;
+}
+
+.drop-poster::after {
+  content: "";
+  position: absolute;
+  right: -9rem;
+  bottom: -12rem;
+  width: 33rem;
+  height: 33rem;
+  border: 1px solid rgba(247, 246, 242, 0.42);
+  border-radius: 50%;
+}
+
+.drop-poster-category,
+.drop-poster-place {
+  position: relative;
+  z-index: 1;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.drop-poster strong {
+  position: relative;
+  z-index: 1;
+  max-width: 10ch;
+  font-size: clamp(3.25rem, 6vw, 5.75rem);
+  font-weight: 500;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+}
+
+.drop-story {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(2.5rem, 6vw, 6rem);
+  border-left: 1px solid var(--foreground);
+}
+
+.drop-story h2 {
+  max-width: 12ch;
+  font-size: clamp(2.75rem, 5vw, 4.8rem);
+  font-weight: 500;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+}
+
+.drop-concept {
+  max-width: 32rem;
+  margin-top: 2rem;
+  color: #55524d;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.drop-vote-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 3rem;
+  border: 1px solid var(--foreground);
+}
+
+.drop-vote-group button {
+  display: flex;
+  min-height: 4.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.25rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.drop-vote-group button + button {
+  border-left: 1px solid var(--foreground);
+}
+
+.drop-vote-group button:hover:not([aria-pressed="true"]) {
+  background: #e8e6e0;
+}
+
+.drop-vote-group button:active:not([aria-pressed="true"]) {
+  background: #d9d6cf;
+}
+
+.drop-vote-group button[aria-pressed="true"] {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.drop-vote-group button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.drop-signin-note,
+.drop-status {
+  margin-top: 1rem;
+  color: #55524d;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.drop-signin-note a {
+  color: inherit;
+  text-underline-offset: 0.2rem;
+}
+
+.drop-vote-status {
+  color: var(--foreground);
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.drop-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 3rem;
+  padding-top: 1.5rem;
+}
+
+.drop-browse-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.drop-reveal-control button,
+.drop-empty button,
+.drop-empty a,
+.lab-setup a {
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  padding: 0 0 0.3rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0.13em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.drop-arrow-button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.drop-arrow-button svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.5;
+}
+
+.drop-arrow-button:hover:not(:disabled) {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.drop-arrow-button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.drop-browse-controls span,
+.drop-reveal-control p {
+  color: #6a6761;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.drop-reveal-control {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: right;
+}
+
+.drop-reveal-control .drop-return-message {
+  color: #6a6761;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.drop-reveal-control button:disabled,
+.drop-empty button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.drop-empty,
+.lab-setup {
+  display: grid;
+  min-height: 32rem;
+  align-content: center;
+  justify-items: start;
+  border-block: 1px solid var(--foreground);
+  padding: 5rem 0;
+}
+
+.drop-empty > p:first-child {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.drop-empty h2,
+.lab-setup h2 {
+  max-width: 16ch;
+  margin: 2rem 0;
+  font-size: clamp(2.75rem, 6vw, 5rem);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.lab-setup p {
+  max-width: 34rem;
+  margin-bottom: 2rem;
+  color: #55524d;
+  line-height: 1.7;
+}
+
+/* =========================
+   Auth recovery
+   ========================= */
+
+.auth-error-page {
+  display: grid;
+  min-height: calc(100vh - 68px);
+  place-items: center;
+  padding: 3rem 1.5rem;
+  background: var(--background);
+}
+
+.auth-error-page section {
+  width: min(100%, 62rem);
+  border-block: 1px solid var(--foreground);
+  padding: clamp(3rem, 8vw, 7rem) 0;
+}
+
+.auth-error-page p {
+  margin-bottom: 2rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.auth-error-page h1 {
+  max-width: 13ch;
+  font-size: clamp(3.5rem, 8vw, 6rem);
+  font-weight: 500;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+}
+
+.auth-error-page div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.auth-error-page a {
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 0.3rem;
+  color: inherit;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
 /* subtle editorial underline */
 
 .site-nav a::after,
@@ -94,17 +489,18 @@ body {
   left: 0;
   bottom: -5px;
 
-  width: 0;
+  width: 100%;
   height: 1px;
 
   background: var(--foreground);
-
-  transition: width 150ms ease;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 150ms ease;
 }
 
 .site-nav a:hover::after,
 .sign-out-button:hover::after {
-  width: 100%;
+  transform: scaleX(1);
 }
 
 
@@ -118,13 +514,35 @@ body {
   }
 }
 
+@media (max-width: 52rem) {
+  .lab-intro {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    padding: 4rem 0 3rem;
+  }
+
+  .drop-feature {
+    grid-template-columns: 1fr;
+  }
+
+  .drop-poster {
+    min-height: 31rem;
+  }
+
+  .drop-story {
+    border-left: 0;
+    padding: 3.5rem 0;
+  }
+}
+
 @media (max-width: 640px) {
   .site-header-inner {
     min-height: 64px;
   }
 
   .site-nav {
-    gap: 14px;
+    gap: 12px;
+    overflow-x: auto;
   }
 
   .site-logo {
@@ -133,7 +551,54 @@ body {
 
   .site-nav a,
   .sign-out-button {
+    font-size: 0.5625rem;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .lab-intro,
+  .drop-stage,
+  .drop-empty,
+  .lab-setup {
+    width: min(100% - 2rem, 80rem);
+  }
+
+  .lab-intro h1 {
+    font-size: clamp(3.5rem, 18vw, 5rem);
+  }
+
+  .drop-poster {
+    min-height: 25rem;
+    padding: 1.25rem;
+  }
+
+  .drop-fiction-label {
+    top: 1rem;
+    right: 1rem;
+  }
+
+  .drop-poster strong {
+    font-size: clamp(2.9rem, 15vw, 4.5rem);
+  }
+
+  .drop-vote-group button {
+    min-height: 4rem;
+    padding: 0 0.9rem;
     font-size: 0.625rem;
-    letter-spacing: 0.1em;
+  }
+
+  .drop-controls,
+  .drop-reveal-control {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .drop-controls {
+    gap: 2.25rem;
+  }
+
+  .drop-reveal-control {
+    gap: 0.75rem;
+    text-align: left;
   }
 }

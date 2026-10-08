@@ -10,7 +10,7 @@ export default async function SavedPage() {
     } = await supabase.auth.getUser();
 
     if (!user) {
-        redirect("/login");
+        redirect("/login?next=/saved");
     }
 
     return (

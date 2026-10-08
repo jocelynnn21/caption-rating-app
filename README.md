@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# POPUP.NYC
 
-## Getting Started
+An editorial guide to real New York pop-ups, plus Daily Drop: a feed of clearly labeled fictional AI pop-up concepts that members can reveal and vote on.
 
-First, run the development server:
+## Local development
+
+Install dependencies and start the app:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Keep these values in `.env.local` locally and in the Vercel project settings for deployment. `.env.local` is ignored by Git.
 
-## Learn More
+```text
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
+SUPABASE_SECRET_KEY=
+CRON_SECRET=
+```
 
-To learn more about Next.js, take a look at the following resources:
+`GEMINI_MODEL` is optional; the value above is the application default. `SUPABASE_SECRET_KEY` and `CRON_SECRET` are server-only secrets and must never use a `NEXT_PUBLIC_` prefix.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Database setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Run the SQL files in [`supabase/migrations`](supabase/migrations) in filename order. They create the generations and votes tables, allow five daily concepts, enable RLS, restrict Daily Drop data to authenticated members, and add the automatic popup-sync fields. Explore remains public, but expired or inactive popup rows are hidden by RLS.
 
-## Deploy on Vercel
+## Automatic popup updates
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Vercel calls `/api/cron/sync-popups` once a day at `10:00 UTC`. The secured route reads the current listings from NYC for FREE and VIP Sample Sale, follows their event links, rejects rows without exact dates, and upserts the normalized events into Supabase. Existing manually curated rows are not deleted. The scraper identifies itself, respects the sources' published robots rules, limits concurrency, and skips a source safely when its structure is unavailable.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Before deploying:
+
+1. Run `supabase/migrations/20261007000000_automatic_popup_sync.sql` in Supabase.
+2. Add `SUPABASE_SECRET_KEY` and a random `CRON_SECRET` of at least 16 characters in Vercel.
+3. Keep `GEMINI_API_KEY` configured for Daily Drop; real-event syncing does not use Gemini.
+
+The homepage also filters `end_date` on every request, so expired listings disappear even if a scheduled sync is delayed.
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+```

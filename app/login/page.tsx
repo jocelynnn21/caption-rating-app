@@ -23,8 +23,8 @@ export default function LoginPage() {
                     </div>
 
                     <p className="mt-14 max-w-sm text-sm leading-6 text-neutral-600 md:mt-20 md:text-base md:leading-7">
-                        Sign in to save the pop-ups, installations, and limited-time
-                        experiences you do not want to miss.
+                        Sign in to save real pop-ups and access the fictional ideas in
+                        Daily Drop.
                     </p>
                 </section>
 

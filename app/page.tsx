@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getNewYorkDate } from "@/lib/daily-drops";
 
 export default async function Page() {
     const supabase = createClient(
@@ -6,9 +7,11 @@ export default async function Page() {
         process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
     );
 
+    const today = getNewYorkDate();
     const { data: popups, error } = await supabase
         .from("popups")
         .select("*")
+        .gte("end_date", today)
         .order("start_date", { ascending: true });
 
     if (error) {

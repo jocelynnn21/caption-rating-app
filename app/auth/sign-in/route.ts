@@ -4,6 +4,17 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function GET(request: NextRequest) {
     let authResponse = NextResponse.next({ request });
 
+    const requestedNext = request.nextUrl.searchParams.get("next");
+    const referrer = request.headers.get("referer");
+    const referrerNext = referrer
+        ? new URL(referrer).searchParams.get("next")
+        : null;
+    const next = ["/lab", "/saved", "/profile"].includes(
+        requestedNext ?? referrerNext ?? ""
+    )
+        ? requestedNext ?? referrerNext
+        : null;
+
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
@@ -46,6 +57,16 @@ export async function GET(request: NextRequest) {
     authResponse.cookies.getAll().forEach((cookie) =>
         response.cookies.set(cookie)
     );
+
+    if (next) {
+        response.cookies.set("post_auth_redirect", next, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            path: "/",
+            maxAge: 600,
+        });
+    }
 
     for (const header of ["cache-control", "expires", "pragma"]) {
         const value = authResponse.headers.get(header);

@@ -4,6 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url);
     const code = searchParams.get("code");
+    const requestedNext = request.cookies.get("post_auth_redirect")?.value;
+    const next = ["/lab", "/saved", "/profile"].includes(requestedNext ?? "")
+        ? requestedNext!
+        : "/";
     let authResponse = NextResponse.next({ request });
 
     const supabase = createServerClient(
@@ -45,12 +49,17 @@ export async function GET(request: NextRequest) {
             if (value) response.headers.set(header, value);
         }
 
+        response.cookies.delete("post_auth_redirect");
         response.headers.set("Cache-Control", "private, no-store, max-age=0");
         return response;
     };
 
     if (!code) {
-        return redirect("/auth/auth-code-error");
+        const {
+            data: { user: existingUser },
+        } = await supabase.auth.getUser();
+
+        return redirect(existingUser ? next : "/auth/auth-code-error");
     }
 
     const { data: authData, error: exchangeError } =
@@ -58,7 +67,11 @@ export async function GET(request: NextRequest) {
 
     if (exchangeError) {
         console.error("Exchange error:", exchangeError);
-        return redirect("/auth/auth-code-error");
+        const {
+            data: { user: existingUser },
+        } = await supabase.auth.getUser();
+
+        return redirect(existingUser ? next : "/auth/auth-code-error");
     }
 
     const user = authData.user;
@@ -77,5 +90,5 @@ export async function GET(request: NextRequest) {
         return redirect("/profile");
     }
 
-    return redirect("/");
+    return redirect(next);
 }
