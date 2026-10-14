@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import PopupCard from "@/components/PopupCard";
 import { getNewYorkDate } from "@/lib/daily-drops";
-import type { Popup } from "@/lib/popups";
+import { isSampleSalePopup, type Popup } from "@/lib/popups";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function SavedPage() {
@@ -29,7 +29,7 @@ export default async function SavedPage() {
         const popupMap = new Map((data as Popup[] | null)?.map((popup) => [popup.id, popup]));
         popups = popupIds.flatMap((id) => {
             const popup = popupMap.get(id);
-            return popup ? [popup] : [];
+            return popup && !isSampleSalePopup(popup) ? [popup] : [];
         });
     }
 

@@ -183,16 +183,57 @@ main p {
   transform: scale(1.02);
 }
 
-.popup-image-placeholder {
-  display: grid;
+.popup-generated-cover {
+  position: relative;
+  display: flex;
   width: 100%;
   height: 100%;
-  place-items: center;
-  color: #8c8983;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: 5.5rem 1.5rem 1.5rem;
+  background: #d9d5cc;
+  color: var(--foreground);
+  outline: 1px solid oklch(0 0 0 / 0.1);
+  outline-offset: -1px;
+}
+
+.popup-cover-brand,
+.popup-cover-meta {
+  position: relative;
+  z-index: 1;
   font-size: 0.625rem;
   font-weight: 650;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
+  line-height: 1.6;
   text-transform: uppercase;
+}
+
+.popup-generated-cover strong {
+  position: relative;
+  z-index: 1;
+  display: -webkit-box;
+  max-width: 12ch;
+  overflow: hidden;
+  font-size: clamp(2.25rem, 4vw, 4rem);
+  font-weight: 500;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.popup-cover-mark {
+  position: absolute;
+  right: -0.08em;
+  bottom: -0.25em;
+  color: oklch(0 0 0 / 0.055);
+  font-size: clamp(8rem, 22vw, 15rem);
+  font-weight: 700;
+  letter-spacing: -0.08em;
+  line-height: 0.8;
 }
 
 .popup-category-tag,

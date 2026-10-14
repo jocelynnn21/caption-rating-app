@@ -47,7 +47,12 @@ function decodeHtml(value: string) {
 }
 
 function stripTags(value: string) {
-    return decodeHtml(value.replace(/<[^>]+>/g, " "));
+    return decodeHtml(
+        value
+            .replace(/<!--[\s\S]*?-->/g, " ")
+            .replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+            .replace(/<[^>]+>/g, " ")
+    );
 }
 
 function getTagAttribute(tag: string, attribute: string) {
@@ -103,19 +108,20 @@ function collectJsonLdImages(value: unknown, images: string[]) {
     }
 }
 
-function getBestImage(html: string, baseUrl: string) {
-    const candidates: string[] = [];
+function getBestImage(html: string, baseUrl: string, preferContentImage = false) {
+    const metadataCandidates: string[] = [];
+    const contentCandidates: string[] = [];
 
     for (const key of ["og:image:secure_url", "og:image", "twitter:image"]) {
         const value = getMeta(html, key);
-        if (value) candidates.push(value);
+        if (value) metadataCandidates.push(value);
     }
 
     const jsonLdScripts = html.match(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) ?? [];
     for (const script of jsonLdScripts) {
         const raw = script.replace(/^<script\b[^>]*>/i, "").replace(/<\/script>$/i, "").trim();
         try {
-            collectJsonLdImages(JSON.parse(raw), candidates);
+            collectJsonLdImages(JSON.parse(raw), metadataCandidates);
         } catch {
             // Some publishers ship invalid JSON-LD. Other image sources still work.
         }
@@ -125,17 +131,19 @@ function getBestImage(html: string, baseUrl: string) {
     for (const tag of imageTags) {
         const itemProp = getTagAttribute(tag, "itemprop").toLowerCase();
         const className = getTagAttribute(tag, "class").toLowerCase();
-        const isLikelyEventImage = itemProp === "image" || /event|hero|cover|featured/.test(className);
+        const isSquarespaceContentImage = Boolean(getTagAttribute(tag, "data-image-component"));
+        const isLikelyEventImage = itemProp === "image" || isSquarespaceContentImage ||
+            /event|hero|cover|featured/.test(className);
         if (!isLikelyEventImage) continue;
 
         for (const attribute of ["data-src", "data-lazy-src", "src"]) {
             const value = getTagAttribute(tag, attribute);
-            if (value) candidates.push(value);
+            if (value) contentCandidates.push(value);
         }
         const srcset = getTagAttribute(tag, "srcset");
         if (srcset) {
             const largest = srcset.split(",").at(-1)?.trim().split(/\s+/)[0];
-            if (largest) candidates.push(largest);
+            if (largest) contentCandidates.push(largest);
         }
     }
 
@@ -143,13 +151,17 @@ function getBestImage(html: string, baseUrl: string) {
     for (const tag of visualTags) {
         const style = getTagAttribute(tag, "style");
         const backgroundImage = style.match(/background-image\s*:\s*url\(["']?([^"')]+)["']?\)/i)?.[1];
-        if (backgroundImage) candidates.push(backgroundImage);
+        if (backgroundImage) contentCandidates.push(backgroundImage);
 
         for (const attribute of ["data-background", "data-bg", "data-image", "data-src"]) {
             const value = getTagAttribute(tag, attribute);
-            if (value) candidates.push(value);
+            if (value) contentCandidates.push(value);
         }
     }
+
+    const candidates = preferContentImage
+        ? [...contentCandidates, ...metadataCandidates]
+        : [...metadataCandidates, ...contentCandidates];
 
     for (const candidate of candidates) {
         const normalized = normalizeImageUrl(candidate, baseUrl);
@@ -157,6 +169,37 @@ function getBestImage(html: string, baseUrl: string) {
     }
 
     return null;
+}
+
+function cleanVipTitle(value: string) {
+    return value
+        .replace(/\s+[—-]\s+VIP SAMPLE SALE.*$/i, "")
+        .replace(/(?:\s*\(Copy\))+\s*$/gi, "")
+        .replace(/\s*-\s*m\d+\s*$/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function getVipEventTitle(html: string, sourceUrl: string) {
+    const headings = (html.match(/<h[12]\b[^>]*>[\s\S]*?<\/h[12]>/gi) ?? [])
+        .map(stripTags)
+        .map(cleanVipTitle)
+        .filter((heading) =>
+            heading.length > 2 &&
+            !/discover upcoming|event updates|fashion\s*&\s*beauty/i.test(heading)
+        );
+
+    if (headings[0]) return headings[0];
+
+    const slug = new URL(sourceUrl).pathname.split("/").filter(Boolean).at(-1) ?? "";
+    const slugName = slug
+        .replace(/-new-york-pop-up-\d{4}-q\d.*$/i, "")
+        .split("-")
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+
+    return cleanVipTitle(slugName || getMeta(html, "og:title"));
 }
 
 function getEventData(html: string, key: string) {
@@ -184,7 +227,7 @@ function parseDateRange(value: string) {
         /(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})/gi)];
     const dates = matches.map((match) => parseWrittenDate(match[0]))
         .filter((date): date is string => Boolean(date));
-    return dates.length > 0 ? { start: dates[0], end: dates[1] ?? dates[0] } : null;
+    return dates.length > 0 ? { start: dates[0], end: dates.at(-1) ?? dates[0] } : null;
 }
 
 function createSourceKey(sourceUrl: string) {
@@ -236,8 +279,9 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper:
 }
 
 function looksLikePopup(name: string, description: string) {
-    return /pop[- ]?up|sample sale|brand experience|experience by|\sx\s|activation|installation|launch|takeover|bodega|diner|coffee shop|cafe/i
-        .test(`${name} ${description}`);
+    const text = `${name} ${description}`;
+    return !/sample sale/i.test(text) &&
+        /pop[- ]?up|brand experience|experience by|\sx\s|activation|installation|launch|takeover|bodega|diner|coffee shop|cafe/i.test(text);
 }
 
 async function scrapeNycForFree(
@@ -282,44 +326,52 @@ async function scrapeNycForFree(
 }
 
 function findVipAddress(html: string) {
-    const match = stripTags(html).match(
-        /\b\d{1,5}\s+[A-Za-z0-9.' -]+(?:Street|St|Avenue|Ave|Broadway|Boulevard|Blvd|Road|Rd),?\s+New York,\s*NY(?:\s+\d{5})?/i);
+    const whereSection = html.match(
+        /<h[3-5]\b[^>]*>\s*(?:<[^>]+>\s*)*where(?:\s*<\/[^>]+>)*\s*<\/h[3-5]>([\s\S]*?)(?=<h[3-5]\b|$)/i
+    )?.[1] ?? html;
+    const match = stripTags(whereSection).match(
+        /\b\d{1,5}\s+[A-Za-z0-9.' -]+(?:Street|St|Avenue|Ave|Broadway|Boulevard|Blvd|Road|Rd)(?:\s*\|\s*Floor\s+\d+)?(?:,?\s+New York(?:,\s*NY)?(?:\s+\d{5})?)?/i);
     return match?.[0] ?? "See source";
 }
 
-async function scrapeVipSampleSale(
+function inferVipNeighborhood(address: string) {
+    if (/Lafayette|SoHo/i.test(address)) return "SoHo";
+    if (/West 18th|W 18th/i.test(address)) return "Chelsea";
+    if (/Fifth Avenue/i.test(address)) return "NoMad";
+    return "Manhattan";
+}
+
+async function scrapeVipPopups(
     today: string,
     verifiedAt: string
 ): Promise<ScrapedPopup[]> {
-    const listingUrl = "https://www.vipsamplesale.com/nycsamplesales";
+    const listingUrl = "https://www.vipsamplesale.com/newyork-fashion-beauty-popup-event";
     const listing = await fetchHtml(listingUrl);
-    const excludedPaths = new Set([
-        "/homepage", "/about", "/nycsamplesales", "/online-events",
-        "/newyork-fashion-beauty-popup-event", "/submit-your-event", "/register-your-brands",
-    ]);
     const urls = extractLinks(listing, listingUrl,
         /^https:\/\/www\.vipsamplesale\.com\/[^/?#]+$/i)
-        .filter((url) => !excludedPaths.has(new URL(url).pathname)).slice(0, 30);
+        .filter((url) => /-new-york-pop-up-\d{4}-q\d+\/?$/i.test(new URL(url).pathname))
+        .slice(0, 30);
 
     return mapWithConcurrency<string, ScrapedPopup>(urls, 6, async (sourceUrl) => {
         const html = await fetchHtml(sourceUrl);
-        const name = getMeta(html, "og:title")
-            .replace(/\s+[—-]\s+VIP SAMPLE SALE.*$/i, "").trim();
+        const name = getVipEventTitle(html, sourceUrl);
         const text = stripTags(html);
         const dateRange = parseDateRange(text);
-        if (!name || !dateRange || dateRange.end < today) return null;
+        if (!name || /sample sale/i.test(`${name} ${sourceUrl}`) ||
+            !dateRange || dateRange.end < today) return null;
 
-        const description = `${name} is a limited-time fashion sale in New York City.`;
+        const description = `${name} is a limited-time pop-up in New York City.`;
+        const address = findVipAddress(html);
         return {
             name,
             description,
-            neighborhood: /\bSoHo\b/i.test(text) ? "SoHo" : "New York City",
-            address: findVipAddress(html),
+            neighborhood: inferVipNeighborhood(address),
+            address,
             start_date: dateRange.start,
             end_date: dateRange.end,
-            category: "Fashion" as const,
+            category: inferCategory(`${name} ${getMeta(html, "description")}`),
             price: "See source",
-            image_url: getBestImage(html, sourceUrl),
+            image_url: getBestImage(html, sourceUrl, true),
             source_url: sourceUrl,
             source_key: createSourceKey(sourceUrl),
             source_provider: "vipsamplesale" as const,
@@ -350,7 +402,7 @@ export async function scrapePopupSources(today: string) {
     const verifiedAt = new Date().toISOString();
     const settled: PromiseSettledResult<ScrapedPopup[]>[] = await Promise.allSettled([
         scrapeNycForFree(today, verifiedAt),
-        scrapeVipSampleSale(today, verifiedAt),
+        scrapeVipPopups(today, verifiedAt),
     ]);
     const events: ScrapedPopup[] = [];
     for (const result of settled) {

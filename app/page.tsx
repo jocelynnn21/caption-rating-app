@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PopupCard from "@/components/PopupCard";
 import { getNewYorkDate } from "@/lib/daily-drops";
-import { isPopupCategory, POPUP_CATEGORIES, type Popup } from "@/lib/popups";
+import { isPopupCategory, isSampleSalePopup, POPUP_CATEGORIES, type Popup } from "@/lib/popups";
 import { createClient } from "@/lib/supabase/server";
 
 type ExplorePageProps = {
@@ -20,12 +20,14 @@ export default async function Page({ searchParams }: ExplorePageProps) {
     let popupQuery = supabase
         .from("popups")
         .select("id, name, category, neighborhood, start_date, end_date, source_url, image_url, source_title, source_provider, last_verified_at")
+        .eq("is_active", true)
         .gte("end_date", today)
         .order("start_date", { ascending: true });
     if (activeCategory !== "All") popupQuery = popupQuery.eq("category", activeCategory);
 
     const [popupResult, userResult] = await Promise.all([popupQuery, supabase.auth.getUser()]);
-    const popups = (popupResult.data ?? []) as Popup[];
+    const popups = ((popupResult.data ?? []) as Popup[])
+        .filter((popup) => !isSampleSalePopup(popup));
     const happeningCount = popups.filter(
         (popup) => popup.start_date <= today && popup.end_date >= today
     ).length;

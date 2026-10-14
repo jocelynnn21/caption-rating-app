@@ -57,6 +57,15 @@ export async function GET(request: Request) {
             throw new Error(`Supabase archive failed: ${archiveError.message}`);
         }
 
+        const { error: retireSampleSalesError } = await admin
+            .from("popups")
+            .update({ is_active: false })
+            .or("name.ilike.%sample sale%,source_url.ilike.%sample-sale%");
+
+        if (retireSampleSalesError) {
+            throw new Error(`Supabase sample-sale cleanup failed: ${retireSampleSalesError.message}`);
+        }
+
         const { data: missingImages, error: missingImagesError } = await admin
             .from("popups")
             .select("id, source_url")

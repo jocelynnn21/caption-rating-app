@@ -1,5 +1,11 @@
 import SavePopupButton from "@/components/SavePopupButton";
-import { formatPopupDate, getFreshnessLabel, getPopupTiming, type Popup } from "@/lib/popups";
+import {
+    formatPopupDate,
+    getFreshnessLabel,
+    getPopupDisplayName,
+    getPopupTiming,
+    type Popup,
+} from "@/lib/popups";
 
 type PopupCardProps = {
     popup: Popup;
@@ -10,6 +16,8 @@ type PopupCardProps = {
 };
 
 export default function PopupCard({ popup, index, today, isSaved, isAuthenticated }: PopupCardProps) {
+    const displayName = getPopupDisplayName(popup);
+
     return (
         <article className="group popup-card">
             <div className="popup-image-wrap">
@@ -18,8 +26,14 @@ export default function PopupCard({ popup, index, today, isSaved, isAuthenticate
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={popup.image_url} alt="" className="popup-image" />
                 ) : (
-                    <div className="popup-image-placeholder" aria-hidden="true">
-                        <span>No event photo</span>
+                    <div className="popup-generated-cover" aria-hidden="true">
+                        <span className="popup-cover-brand">POPUP.NYC</span>
+                        <strong>{displayName}</strong>
+                        <span className="popup-cover-meta">
+                            {popup.neighborhood}<br />
+                            {formatPopupDate(popup.start_date)} — {formatPopupDate(popup.end_date)}
+                        </span>
+                        <span className="popup-cover-mark">NYC</span>
                     </div>
                 )}
                 <span className="popup-category-tag">{popup.category}</span>
@@ -31,7 +45,7 @@ export default function PopupCard({ popup, index, today, isSaved, isAuthenticate
                 <span className="popup-timing">{getPopupTiming(popup, today)}</span>
             </div>
 
-            <h2 className="popup-card-title">{popup.name}</h2>
+            <h2 className="popup-card-title">{displayName}</h2>
 
             <div className="popup-card-details">
                 <div><p>Location</p><span>{popup.neighborhood}</span></div>

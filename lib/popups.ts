@@ -62,3 +62,58 @@ export function getFreshnessLabel(lastVerifiedAt: string | null) {
         timeZone: "America/New_York",
     })}`;
 }
+
+const VIP_BRAND_NAMES: Record<string, string> = {
+    "3-1-phillip-lim": "3.1 Phillip Lim",
+    "ds-durga": "D.S. & Durga",
+    "lagence": "L'Agence",
+};
+
+function cleanStoredPopupName(name: string) {
+    return name
+        .replace(/(?:\s*\(copy\))+\s*$/gi, "")
+        .replace(/-m\d+\s*$/i, "")
+        .trim();
+}
+
+function titleCaseSlug(value: string) {
+    return value
+        .split("-")
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+}
+
+export function getPopupDisplayName(
+    popup: Pick<Popup, "name" | "source_provider" | "source_url">,
+) {
+    const storedName = cleanStoredPopupName(popup.name);
+
+    if (popup.source_provider !== "vipsamplesale" || !popup.source_url) {
+        return storedName;
+    }
+
+    try {
+        const slug = decodeURIComponent(new URL(popup.source_url).pathname)
+            .split("/")
+            .filter(Boolean)
+            .at(-1);
+        const brandSlug = slug?.match(
+            /^(.*?)(?:-m\d+)?-new-york-sample-sale(?:-\d{4}-q\d+)?$/i,
+        )?.[1]?.toLowerCase();
+
+        if (!brandSlug) return storedName;
+
+        const brandName = VIP_BRAND_NAMES[brandSlug] ?? titleCaseSlug(brandSlug);
+        return `${brandName} Sample Sale`;
+    } catch {
+        return storedName;
+    }
+}
+
+export function isSampleSalePopup(
+    popup: Pick<Popup, "name" | "source_url">,
+) {
+    return /sample sale/i.test(popup.name) ||
+        /sample-sale/i.test(popup.source_url ?? "");
+}
