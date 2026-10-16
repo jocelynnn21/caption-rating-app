@@ -180,7 +180,40 @@ function cleanVipTitle(value: string) {
         .trim();
 }
 
+function getVipSlugTitle(sourceUrl: string) {
+    const slug = new URL(sourceUrl).pathname.split("/").filter(Boolean).at(-1) ?? "";
+    return cleanVipTitle(
+        slug
+            .replace(/-new-york-pop-up-\d{4}-q\d.*$/i, "")
+            .split("-")
+            .filter(Boolean)
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ")
+    );
+}
+
+function titleTokens(value: string) {
+    return new Set(
+        value
+            .toLocaleLowerCase("en-US")
+            .replace(/[^a-z0-9]+/g, " ")
+            .trim()
+            .split(/\s+/)
+            .filter((token) => token.length > 1 && !["new", "york", "popup", "pop", "up"].includes(token))
+    );
+}
+
+function titleMatchesSlug(candidate: string, slugTitle: string) {
+    const candidateTokens = titleTokens(candidate);
+    const slugTokens = titleTokens(slugTitle);
+    if (candidateTokens.size === 0 || slugTokens.size === 0) return false;
+
+    const shared = [...slugTokens].filter((token) => candidateTokens.has(token)).length;
+    return shared / slugTokens.size >= 0.6;
+}
+
 function getVipEventTitle(html: string, sourceUrl: string) {
+    const slugTitle = getVipSlugTitle(sourceUrl);
     const headings = (html.match(/<h[12]\b[^>]*>[\s\S]*?<\/h[12]>/gi) ?? [])
         .map(stripTags)
         .map(cleanVipTitle)
@@ -188,18 +221,15 @@ function getVipEventTitle(html: string, sourceUrl: string) {
             heading.length > 2 &&
             !/discover upcoming|event updates|fashion\s*&\s*beauty/i.test(heading)
         );
+    const metadataTitles = [getMeta(html, "og:title"), getMeta(html, "twitter:title")]
+        .map(cleanVipTitle)
+        .filter(Boolean);
+    const matchingTitle = [...metadataTitles, ...headings]
+        .find((candidate) => titleMatchesSlug(candidate, slugTitle));
 
-    if (headings[0]) return headings[0];
-
-    const slug = new URL(sourceUrl).pathname.split("/").filter(Boolean).at(-1) ?? "";
-    const slugName = slug
-        .replace(/-new-york-pop-up-\d{4}-q\d.*$/i, "")
-        .split("-")
-        .filter(Boolean)
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
-
-    return cleanVipTitle(slugName || getMeta(html, "og:title"));
+    // The URL slug is the stable event identity. Never borrow a heading from a
+    // related-event module when it does not describe the canonical page.
+    return matchingTitle ?? slugTitle;
 }
 
 function getEventData(html: string, key: string) {
@@ -234,13 +264,16 @@ function createSourceKey(sourceUrl: string) {
     return createHash("sha256").update(sourceUrl).digest("hex");
 }
 
-function inferCategory(value: string): ScrapedPopup["category"] {
+function inferCategory(
+    value: string,
+    fallback: ScrapedPopup["category"] = "Art"
+): ScrapedPopup["category"] {
     const text = value.toLowerCase();
-    if (/beauty|skin|makeup|cosmetic|fragrance|hair/.test(text)) return "Beauty";
-    if (/food|drink|coffee|cafe|bakery|diner|restaurant|latte|snack/.test(text)) return "Food & Drink";
+    if (/beauty|skin|makeup|cosmetic|fragrance|hair|ceramide|burt.?s bees|bliss|anua|merit|lanolips|living proof|allure|innisfree|salt\s*&\s*stone/.test(text)) return "Beauty";
+    if (/food|drink|coffee|cafe|café|bakery|diner|restaurant|latte|snack|nespresso|bagel|oven/.test(text)) return "Food & Drink";
     if (/music|album|concert|record|vinyl|artist/.test(text)) return "Music";
-    if (/fashion|sample sale|clothing|designer|apparel|shoe|jewel/.test(text)) return "Fashion";
-    return "Art";
+    if (/fashion|sample sale|clothing|designer|apparel|shoe|jewel|denim|runway|activewear|wardrobe|good american|bombas|victoria.?s secret|beyond yoga/.test(text)) return "Fashion";
+    return fallback;
 }
 
 function extractLinks(html: string, baseUrl: string, pattern: RegExp) {
@@ -355,9 +388,11 @@ async function scrapeVipPopups(
     return mapWithConcurrency<string, ScrapedPopup>(urls, 6, async (sourceUrl) => {
         const html = await fetchHtml(sourceUrl);
         const name = getVipEventTitle(html, sourceUrl);
+        const slugTitle = getVipSlugTitle(sourceUrl);
         const text = stripTags(html);
         const dateRange = parseDateRange(text);
         if (!name || /sample sale/i.test(`${name} ${sourceUrl}`) ||
+            !titleMatchesSlug(name, slugTitle) ||
             !dateRange || dateRange.end < today) return null;
 
         const description = `${name} is a limited-time pop-up in New York City.`;
@@ -369,7 +404,7 @@ async function scrapeVipPopups(
             address,
             start_date: dateRange.start,
             end_date: dateRange.end,
-            category: inferCategory(`${name} ${getMeta(html, "description")}`),
+            category: inferCategory(`${name} ${getMeta(html, "description")}`, "Fashion"),
             price: "See source",
             image_url: getBestImage(html, sourceUrl, true),
             source_url: sourceUrl,

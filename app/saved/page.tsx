@@ -36,12 +36,12 @@ export default async function SavedPage() {
     const today = getNewYorkDate();
 
     return (
-        <main className="min-h-screen bg-[#f7f6f2] text-black">
+        <main className="min-h-screen bg-background text-foreground">
             <div className="mx-auto max-w-7xl px-6 py-16 md:px-10 md:py-24">
                 <header className="border-b border-black pb-10 md:pb-14">
                     <div className="mb-5 flex items-end justify-between">
                         <p className="text-xs font-medium uppercase tracking-[0.22em]">Your collection</p>
-                        <p className="tabular-nums text-xs uppercase tracking-[0.16em] text-neutral-500">
+                        <p className="tabular-nums text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">
                             {String(popups.length).padStart(2, "0")} Saved
                         </p>
                     </div>

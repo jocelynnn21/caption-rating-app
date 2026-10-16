@@ -5,9 +5,14 @@ export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url);
     const code = searchParams.get("code");
     const requestedNext = request.cookies.get("post_auth_redirect")?.value;
+    const requestedSave = request.cookies.get("post_auth_save_popup")?.value;
     const next = ["/lab", "/saved", "/profile"].includes(requestedNext ?? "")
         ? requestedNext!
         : "/";
+    const parsedSave = requestedSave ? Number(requestedSave) : NaN;
+    const pendingSavePopupId = Number.isSafeInteger(parsedSave) && parsedSave > 0
+        ? parsedSave
+        : null;
     let authResponse = NextResponse.next({ request });
 
     const supabase = createServerClient(
@@ -50,10 +55,15 @@ export async function GET(request: NextRequest) {
         }
 
         response.cookies.delete("post_auth_redirect");
+        response.cookies.delete("post_auth_save_popup");
         response.headers.set("Cache-Control", "private, no-store, max-age=0");
         return response;
     };
-    const loginErrorPath = `/login?error=oauth&next=${encodeURIComponent(next)}`;
+    const loginErrorParams = new URLSearchParams({ error: "oauth", next });
+    if (pendingSavePopupId) {
+        loginErrorParams.set("save", String(pendingSavePopupId));
+    }
+    const loginErrorPath = `/login?${loginErrorParams.toString()}`;
 
     if (!code) {
         const {
@@ -88,7 +98,25 @@ export async function GET(request: NextRequest) {
         .single();
 
     if (!profile?.first_name || !profile?.last_name) {
-        return redirect("/profile");
+        const profileParams = new URLSearchParams();
+        if (next !== "/profile") profileParams.set("next", next);
+        if (pendingSavePopupId) profileParams.set("save", String(pendingSavePopupId));
+        const profilePath = profileParams.size > 0
+            ? `/profile?${profileParams.toString()}`
+            : "/profile";
+        return redirect(profilePath);
+    }
+
+    if (pendingSavePopupId) {
+        const { error: saveError } = await supabase.from("saved_popups").upsert(
+            { user_id: user.id, popup_id: pendingSavePopupId },
+            { onConflict: "user_id,popup_id" }
+        );
+
+        if (saveError) {
+            console.error("Could not finish the pending save after sign-in:", saveError);
+            return redirect("/?saveError=1");
+        }
     }
 
     return redirect(next);

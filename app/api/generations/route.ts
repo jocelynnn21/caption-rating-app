@@ -1,21 +1,12 @@
 import { NextResponse } from "next/server";
 import {
+    addPrivateVoteData,
     addVoteSummary,
     getNewYorkDate,
     type DailyDrop,
 } from "@/lib/daily-drops";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-
-const pairings = [
-    ["A24", "New York Public Library"],
-    ["LEGO", "Katz’s Delicatessen"],
-    ["Glossier", "MTA"],
-    ["Trader Joe’s", "MoMA PS1"],
-    ["Nintendo", "The Strand"],
-    ["Carhartt", "Russ & Daughters"],
-    ["Muji", "Coney Island"],
-    ["Spotify", "Brooklyn Botanic Garden"],
-];
 
 const neighborhoods = [
     "SoHo",
@@ -44,22 +35,79 @@ type GeminiResponse = {
 };
 
 type GeneratedConcept = {
+    brand: string;
+    partner: string;
     title: string;
-    collaboration: string;
     concept: string;
     hook: string;
-    neighborhood: string;
     category: string;
 };
 
-function pick<T>(items: T[]) {
-    return items[Math.floor(Math.random() * items.length)];
+const allowedCategories = [
+    "Art",
+    "Beauty",
+    "Books",
+    "Culture",
+    "Fashion",
+    "Food",
+    "Games",
+    "Music",
+] as const;
+
+const sharedDropSelection =
+    "id, creator_id, prompt, title, collaboration, concept, hook, neighborhood, category, model, daily_slot, created_at";
+
+function shuffle<T>(items: T[]) {
+    return [...items].sort(() => Math.random() - 0.5);
 }
 
 const wait = (milliseconds: number) =>
     new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-async function generateConcept(
+function normalizeText(value: unknown, maxLength: number) {
+    if (typeof value !== "string") return null;
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) return null;
+    return Array.from(normalized).slice(0, maxLength).join("");
+}
+
+function normalizeConcept(value: unknown): GeneratedConcept | null {
+    if (!value || typeof value !== "object") return null;
+
+    const record = value as Record<string, unknown>;
+    const brand = normalizeText(record.brand, 60);
+    const partner = normalizeText(record.partner, 80);
+    const title = normalizeText(record.title, 80);
+    const concept = normalizeText(record.concept, 220);
+    const hook = normalizeText(record.hook, 80);
+    const requestedCategory = normalizeText(record.category, 24);
+
+    if (!brand || !partner || !title || !concept || !hook || !requestedCategory) {
+        return null;
+    }
+
+    const category = allowedCategories.find(
+        (item) => item.toLowerCase() === requestedCategory.toLowerCase()
+    ) ?? "Culture";
+
+    return { brand, partner, title, concept, hook, category };
+}
+
+function normalizeKey(value: string) {
+    return value.toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function getBrandFromCollaboration(collaboration: string) {
+    return collaboration.split("×")[0]?.trim() ?? collaboration.trim();
+}
+
+function shiftIsoDate(date: string, days: number) {
+    const value = new Date(`${date}T00:00:00Z`);
+    value.setUTCDate(value.getUTCDate() + days);
+    return value.toISOString().slice(0, 10);
+}
+
+async function generateConceptBatch(
     apiKey: string,
     requestedModel: string,
     prompt: string
@@ -71,70 +119,84 @@ async function generateConcept(
 
     for (const model of models) {
         for (let attempt = 0; attempt < 2; attempt += 1) {
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": apiKey,
-                    },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: {
-                            responseMimeType: "application/json",
-                            responseSchema: {
-                                type: "OBJECT",
-                                required: [
-                                    "title",
-                                    "collaboration",
-                                    "concept",
-                                    "hook",
-                                    "neighborhood",
-                                    "category",
-                                ],
-                                properties: {
-                                    title: {
-                                        type: "STRING",
-                                        description: "A plain, descriptive title, four words maximum.",
-                                    },
-                                    collaboration: {
-                                        type: "STRING",
-                                        description: "The two names joined with ×.",
-                                    },
-                                    concept: {
-                                        type: "STRING",
-                                        description: "One short sentence saying exactly what visitors can do.",
-                                    },
-                                    hook: {
-                                        type: "STRING",
-                                        description: "A direct reason to visit, seven words maximum.",
-                                    },
-                                    neighborhood: { type: "STRING" },
-                                    category: {
-                                        type: "STRING",
-                                        description: "One familiar category such as Food, Games, Beauty, Books, Art, Fashion, or Music.",
+            try {
+                const response = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": apiKey,
+                        },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: {
+                                responseMimeType: "application/json",
+                                responseSchema: {
+                                    type: "ARRAY",
+                                    minItems: 5,
+                                    maxItems: 5,
+                                    items: {
+                                        type: "OBJECT",
+                                        required: [
+                                            "brand",
+                                            "partner",
+                                            "title",
+                                            "concept",
+                                            "hook",
+                                            "category",
+                                        ],
+                                        properties: {
+                                            brand: {
+                                                type: "STRING",
+                                                description: "One real consumer-facing brand.",
+                                            },
+                                            partner: {
+                                                type: "STRING",
+                                                description: "One real New York institution, local business, place, or cultural organization.",
+                                            },
+                                            title: {
+                                                type: "STRING",
+                                                description: "A plain, descriptive title, four words maximum.",
+                                            },
+                                            concept: {
+                                                type: "STRING",
+                                                description: "One short sentence saying exactly what visitors can do.",
+                                            },
+                                            hook: {
+                                                type: "STRING",
+                                                description: "A direct reason to visit, seven words maximum.",
+                                            },
+                                            category: {
+                                                type: "STRING",
+                                                description: "One familiar category such as Food, Games, Beauty, Books, Art, Fashion, or Music.",
+                                            },
+                                        },
                                     },
                                 },
                             },
-                        },
-                    }),
-                }
-            );
+                        }),
+                        signal: AbortSignal.timeout(15_000),
+                    }
+                );
 
-            if (response.ok) {
-                return { response, model };
+                if (response.ok) {
+                    return { response, model };
+                }
+
+                lastFailure = await response.text();
+                const isTemporary = response.status === 429 || response.status === 503;
+
+                if (!isTemporary) break;
+            } catch (error) {
+                lastFailure = error instanceof Error ? error.message : "Network request failed.";
             }
 
-            lastFailure = await response.text();
-            const isTemporary = response.status === 429 || response.status === 503;
-
-            if (!isTemporary) break;
             await wait(400 * (attempt + 1));
         }
     }
 
-    console.error("Gemini generation failed after retries:", lastFailure);
+    console.error("Gemini batch generation failed after retries:", lastFailure);
     return null;
 }
 
@@ -146,7 +208,7 @@ export async function POST(request: Request) {
 
     if (!user) {
         return NextResponse.json(
-            { error: "Sign in to reveal a Daily Drop." },
+            { error: "Sign in to generate AI concepts." },
             { status: 401 }
         );
     }
@@ -156,105 +218,208 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
         return NextResponse.json(
-            { error: "Daily Drop is waiting for its Gemini API key." },
+            { error: "What If NYC needs a Gemini API key." },
             { status: 503 }
         );
     }
 
-    const body = await request.json().catch(() => null);
+    await request.json().catch(() => null);
     const today = getNewYorkDate();
-    const { count: generatedToday, error: countError } = await supabase
+    const { data: existingRows, error: existingError } = await supabase
         .from("ai_generations")
-        .select("id", { count: "exact", head: true })
-        .eq("creator_id", user.id)
-        .eq("generated_on", today);
+        .select(sharedDropSelection)
+        .eq("generated_on", today)
+        .not("daily_slot", "is", null)
+        .order("daily_slot", { ascending: true })
+        .limit(5);
 
-    if (countError) {
-        console.error("Could not check the daily generation count:", countError);
+    if (existingError) {
+        console.error("Could not check today’s shared concepts:", existingError);
         return NextResponse.json(
-            { error: "Could not check today’s generation limit." },
+            { error: "Could not check today’s shared concepts." },
             { status: 500 }
         );
     }
 
-    const remaining = Math.max(0, 5 - (generatedToday ?? 0));
-    if (remaining === 0) {
+    if (existingRows?.length === 5) {
+        const voteData = await addPrivateVoteData(
+            supabase,
+            existingRows as DailyDrop[]
+        );
+        if (voteData.error) {
+            console.error("Could not load private vote data:", voteData.error);
+            return NextResponse.json(
+                { error: "Could not load today’s vote data." },
+                { status: 500 }
+            );
+        }
+        const drops = voteData.drops;
         return NextResponse.json(
-            { error: "You generated today’s five. Come back tomorrow." },
-            { status: 429 }
+            {
+                drop: drops[0],
+                drops,
+                created: false,
+                message: "Today’s shared five were already generated.",
+            },
+            { status: 200 }
         );
     }
 
-    const requestedCount = body?.count === 5 ? 5 : 1;
-    const count = Math.min(requestedCount, remaining);
-    const selectedPairings = [...pairings]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, count);
-    const generatedRows = [];
+    if (existingRows && existingRows.length > 0) {
+        return NextResponse.json(
+            { error: "Today’s shared set is incomplete. Try again shortly." },
+            { status: 409 }
+        );
+    }
 
-    for (const pairing of selectedPairings) {
-        const neighborhood = pick(neighborhoods);
-        const format = pick(formats);
-        const prompt = `Create a clearly fictional New York City pop-up concept for POPUP.NYC. Combine ${pairing[0]} with ${pairing[1]} in ${neighborhood} as ${format}. Write in plain English that a college student can understand in five seconds. The concept must be one short sentence explaining exactly what a visitor does. Use no metaphors, jargon, art criticism, abstract language, prices, dates, or fabricated quotations. Keep the title and hook short. Return concise JSON only.`;
-        const generation = await generateConcept(apiKey, requestedModel, prompt);
+    let admin;
+    try {
+        admin = createAdminClient();
+    } catch (error) {
+        console.error("AI generation is missing its Supabase server secret:", error);
+        return NextResponse.json(
+            { error: "AI generation is not configured." },
+            { status: 503 }
+        );
+    }
 
-        if (!generation) {
-            return NextResponse.json(
-                { error: "The city’s imagination is taking a break. Try again." },
-                { status: 502 }
-            );
-        }
+    const recentSince = shiftIsoDate(today, -30);
+    const { data: recentRows, error: recentError } = await supabase
+        .from("ai_generations")
+        .select("title, collaboration")
+        .gte("generated_on", recentSince)
+        .lt("generated_on", today)
+        .not("daily_slot", "is", null)
+        .order("generated_on", { ascending: false })
+        .limit(100);
+
+    if (recentError) {
+        console.error("Could not load recent concepts for variety:", recentError);
+    }
+
+    const recentCollaborations = (recentRows ?? [])
+        .map((row) => normalizeText(row.collaboration, 140))
+        .filter((value): value is string => Boolean(value));
+    const usedBrandKeys = new Set(
+        recentCollaborations.map((value) =>
+            normalizeKey(getBrandFromCollaboration(value))
+        )
+    );
+    const usedCollaborationKeys = new Set(
+        recentCollaborations.map(normalizeKey)
+    );
+    const selectedNeighborhoods = shuffle(neighborhoods).slice(0, 5);
+    const selectedFormats = shuffle(formats).slice(0, 5);
+    const brandsToAvoid = Array.from(usedBrandKeys).slice(0, 60).join(", ");
+    const collaborationsToAvoid = recentCollaborations.slice(0, 40).join("; ");
+    const slotBriefs = selectedNeighborhoods.map((neighborhood, index) =>
+        `${index + 1}. ${neighborhood}: ${selectedFormats[index]}`
+    ).join("\n");
+    const prompt = `You are a senior experiential-marketing creative strategist. Create exactly five clearly fictional New York City pop-up concepts for POPUP.NYC, one for each numbered brief below and in the same order:\n${slotBriefs}\n\nEach concept must choose a different real consumer-facing brand and a different real New York institution, local business, place, or cultural organization as its partner. Choose surprising names that make strategic sense; do not default to the most famous global brands. The visitor action must be specific and understandable in five seconds, with a useful, collectible, edible, wearable, or memorable outcome. Avoid generic photo booths, product sampling, branded cafés, immersive rooms, vague installations, marketing jargon, metaphors, art criticism, prices, dates, and fabricated quotations. Do not use any recently used brand: ${brandsToAvoid || "none"}. Do not repeat these recent collaborations: ${collaborationsToAvoid || "none"}. Keep every title to four words, every hook to seven words, and every concept to one short sentence saying exactly what the visitor does. Return a JSON array of exactly five objects only.`;
+
+    let acceptedBatch: { concepts: GeneratedConcept[]; model: string } | null = null;
+
+    for (let semanticAttempt = 0; semanticAttempt < 2; semanticAttempt += 1) {
+        const generation = await generateConceptBatch(apiKey, requestedModel, prompt);
+        if (!generation) continue;
 
         const geminiData = (await generation.response.json()) as GeminiResponse;
         const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) continue;
 
-        if (!rawText) {
-            return NextResponse.json(
-                { error: "Gemini returned an empty concept. Try again." },
-                { status: 502 }
-            );
-        }
-
-        let generated: GeneratedConcept;
+        let parsed: unknown;
         try {
-            generated = JSON.parse(rawText) as GeneratedConcept;
+            parsed = JSON.parse(rawText);
         } catch {
-            console.error("Gemini returned invalid JSON:", rawText);
-            return NextResponse.json(
-                { error: "The concept arrived in an unexpected format. Try again." },
-                { status: 502 }
-            );
+            console.error("Gemini returned invalid batch JSON.");
+            continue;
         }
 
-        generatedRows.push({
-            creator_id: user.id,
-            generated_on: today,
-            prompt,
-            title: generated.title,
-            collaboration: `${pairing[0]} × ${pairing[1]}`,
-            concept: generated.concept,
-            hook: generated.hook,
-            neighborhood,
-            category: generated.category,
-            model: generation.model,
-        });
+        if (!Array.isArray(parsed) || parsed.length !== 5) continue;
+        const concepts = parsed.map(normalizeConcept);
+        if (concepts.some((concept) => !concept)) continue;
+
+        const normalized = concepts as GeneratedConcept[];
+        const batchBrandKeys = normalized.map((concept) => normalizeKey(concept.brand));
+        const batchPartnerKeys = normalized.map((concept) => normalizeKey(concept.partner));
+        const batchCollaborationKeys = normalized.map((concept) =>
+            normalizeKey(`${concept.brand} × ${concept.partner}`)
+        );
+        const isDistinct =
+            new Set(batchBrandKeys).size === 5 &&
+            new Set(batchPartnerKeys).size === 5 &&
+            new Set(batchCollaborationKeys).size === 5;
+        const repeatsRecent = batchBrandKeys.some((key) => usedBrandKeys.has(key)) ||
+            batchCollaborationKeys.some((key) => usedCollaborationKeys.has(key));
+
+        if (!isDistinct || repeatsRecent) continue;
+        acceptedBatch = { concepts: normalized, model: generation.model };
+        break;
     }
 
-    const { data: inserted, error } = await supabase
+    if (!acceptedBatch) {
+        return NextResponse.json(
+            { error: "Gemini could not create five distinct brand ideas. Try again." },
+            { status: 502 }
+        );
+    }
+
+    const generatedRows = acceptedBatch.concepts.map((generated, index) => ({
+        creator_id: user.id,
+        generated_on: today,
+        daily_slot: index + 1,
+        prompt,
+        title: generated.title,
+        collaboration: `${generated.brand} × ${generated.partner}`,
+        concept: generated.concept,
+        hook: generated.hook,
+        neighborhood: selectedNeighborhoods[index],
+        category: generated.category,
+        model: acceptedBatch.model,
+    }));
+
+    const { data: inserted, error } = await admin
         .from("ai_generations")
         .insert(generatedRows)
         .select(
-            "id, creator_id, prompt, title, collaboration, concept, hook, neighborhood, category, model, created_at"
+            "id, creator_id, prompt, title, collaboration, concept, hook, neighborhood, category, model, daily_slot, created_at"
         );
 
     if (error || !inserted?.length) {
         console.error("Could not save generation:", error);
 
         if (error?.code === "23505") {
+            const { data: winningRows } = await supabase
+                .from("ai_generations")
+                .select(sharedDropSelection)
+                .eq("generated_on", today)
+                .not("daily_slot", "is", null)
+                .order("daily_slot", { ascending: true })
+                .limit(5);
+
+            if (winningRows?.length === 5) {
+                const voteData = await addPrivateVoteData(
+                    supabase,
+                    winningRows as DailyDrop[]
+                );
+                if (voteData.error) {
+                    console.error("Could not load private vote data:", voteData.error);
+                    return NextResponse.json(
+                        { error: "Could not load today’s vote data." },
+                        { status: 500 }
+                    );
+                }
+                const drops = voteData.drops;
+                return NextResponse.json({
+                    drop: drops[0],
+                    drops,
+                    created: false,
+                    message: "Another member just generated today’s shared five.",
+                });
+            }
+
             return NextResponse.json(
-                {
-                    error: "The database still has the old one-drop-per-day limit. Run the latest Supabase migration once, then try again.",
-                },
+                { error: "Today’s concepts could not be claimed. Try again." },
                 { status: 409 }
             );
         }
@@ -262,7 +427,7 @@ export async function POST(request: Request) {
         if (error?.code === "42501") {
             return NextResponse.json(
                 {
-                    error: "Supabase RLS blocked the save. Confirm the Daily Drop policies are installed.",
+                    error: "Supabase RLS blocked the save. Confirm the generation policies are installed.",
                 },
                 { status: 403 }
             );
@@ -275,12 +440,13 @@ export async function POST(request: Request) {
     }
 
     const drops = inserted.map((drop) =>
-        addVoteSummary({ ...drop, votes: [] } as DailyDrop, user.id)
+        addVoteSummary(drop as DailyDrop)
     );
 
     return NextResponse.json({
         drop: drops[0],
         drops,
         created: true,
+        message: "Today’s shared five are ready to rate.",
     });
 }

@@ -34,7 +34,17 @@ export async function updateSession(request: NextRequest) {
     // This validates the current token and refreshes it when necessary.
     // Keep it immediately after client creation so request and response cookies
     // cannot drift apart before Server Components render.
-    await supabase.auth.getClaims();
+    const { data } = await supabase.auth.getClaims();
+
+    if (request.nextUrl.pathname === "/profile" && !data?.claims?.sub) {
+        const loginUrl = request.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.search = "";
+        loginUrl.searchParams.set("next", "/profile");
+        const redirect = NextResponse.redirect(loginUrl);
+        response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+        return redirect;
+    }
 
     return response;
 }

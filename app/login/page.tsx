@@ -1,11 +1,15 @@
 import LoginForm from "@/components/LoginForm";
 
 type LoginPageProps = {
-    searchParams: Promise<{ next?: string | string[]; error?: string | string[] }>;
+    searchParams: Promise<{
+        next?: string | string[];
+        error?: string | string[];
+        save?: string | string[];
+    }>;
 };
 
 const destinations: Record<string, string> = {
-    "/lab": "Daily Drop",
+    "/lab": "What If NYC",
     "/saved": "Saved",
     "/profile": "your profile",
 };
@@ -16,9 +20,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     const next = requestedNext && destinations[requestedNext] ? requestedNext : "/";
     const destination = destinations[next] ?? "POPUP.NYC";
     const error = (Array.isArray(params.error) ? params.error[0] : params.error) === "oauth";
+    const requestedSave = Array.isArray(params.save) ? params.save[0] : params.save;
+    const parsedSave = requestedSave ? Number(requestedSave) : NaN;
+    const pendingSavePopupId = Number.isSafeInteger(parsedSave) && parsedSave > 0
+        ? parsedSave
+        : undefined;
 
     return (
-        <main className="min-h-[calc(100vh-68px)] bg-[#f7f6f2] text-black">
+        <main className="min-h-[calc(100vh-68px)] bg-background text-foreground">
             <div className="mx-auto grid min-h-[calc(100vh-68px)] max-w-7xl px-6 py-16 md:grid-cols-2 md:px-10 md:py-24">
                 <section className="flex flex-col justify-between border-b border-black pb-12 md:border-b-0 md:border-r md:pb-0 md:pr-16 lg:pr-24">
                     <div>
@@ -28,8 +37,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     </div>
 
                     <p className="mt-14 max-w-sm text-sm leading-6 text-neutral-600 md:mt-20 md:text-base md:leading-7">
-                        Sign in to save real pop-ups and access the fictional ideas in
-                        Daily Drop.
+                        Sign in to save real pop-ups and rate AI-generated pop-up concepts.
                     </p>
                 </section>
 
@@ -51,7 +59,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                             </p>
                         )}
 
-                        <LoginForm next={next} />
+                        <LoginForm
+                            next={next}
+                            pendingSavePopupId={pendingSavePopupId}
+                        />
 
                         <p className="mt-6 text-xs leading-5 text-neutral-600">
                             You’ll return to {destination} after sign-in.

@@ -16,8 +16,9 @@ export default function SavePopupButton({ popupId, initialSaved, isAuthenticated
     const [message, setMessage] = useState("");
 
     const toggleSave = async () => {
+        if (isPending) return;
         if (!isAuthenticated) {
-            router.push("/login?next=/");
+            router.push(`/login?next=/&save=${popupId}`);
             return;
         }
 
@@ -33,18 +34,28 @@ export default function SavePopupButton({ popupId, initialSaved, isAuthenticated
                 body: JSON.stringify({ popupId }),
             });
 
+            const result = await response.json().catch(() => ({})) as {
+                error?: unknown;
+            };
+
             if (!response.ok) {
                 if (response.status === 401) {
-                    router.push("/login?next=/");
+                    router.push(`/login?next=/&save=${popupId}`);
                     return;
                 }
-                throw new Error("Save request failed");
+                throw new Error(
+                    typeof result.error === "string"
+                        ? result.error
+                        : "Could not update this save."
+                );
             }
 
             router.refresh();
-        } catch {
+        } catch (error) {
             setIsSaved(!nextSaved);
-            setMessage("Could not save");
+            setMessage(
+                error instanceof Error ? error.message : "Could not update this save."
+            );
         } finally {
             setIsPending(false);
         }
@@ -59,7 +70,7 @@ export default function SavePopupButton({ popupId, initialSaved, isAuthenticated
                 <span>{isSaved ? "Saved" : "Save"}</span>
             </button>
             <span
-                className={message === "Could not save" ? "popup-save-error" : "sr-only"}
+                className={message && message !== "Saved" && message !== "Removed" ? "popup-save-error" : "sr-only"}
                 aria-live="polite"
             >
                 {message}

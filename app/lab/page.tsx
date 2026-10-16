@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import DailyDropFeed from "@/components/DailyDropFeed";
 import {
-    addVoteSummary,
+    addPrivateVoteData,
     getNewYorkDate,
     type DailyDrop,
 } from "@/lib/daily-drops";
@@ -25,47 +25,49 @@ export default async function LabPage() {
     const { data, error } = await supabase
         .from("ai_generations")
         .select(
-            "id, creator_id, prompt, title, collaboration, concept, hook, neighborhood, category, model, created_at, votes(user_id, value)"
+            "id, creator_id, prompt, title, collaboration, concept, hook, neighborhood, category, model, daily_slot, created_at"
         )
         .eq("generated_on", today)
-        .order("created_at", { ascending: false })
+        .not("daily_slot", "is", null)
+        .order("daily_slot", { ascending: true })
         .limit(5);
 
-    const drops = ((data ?? []) as DailyDrop[]).map((drop) =>
-        addVoteSummary(drop, user.id)
+    const voteData = await addPrivateVoteData(
+        supabase,
+        (data ?? []) as DailyDrop[]
     );
-    const { count } = await supabase
-        .from("ai_generations")
-        .select("id", { count: "exact", head: true })
-        .eq("creator_id", user.id)
-        .eq("generated_on", today);
-    const remainingGenerations = Math.max(0, 5 - (count ?? 0));
+    const drops = voteData.drops;
+    const hasIncompleteSet = drops.length > 0 && drops.length < 5;
 
     return (
         <main className="lab-page">
             <section className="lab-intro">
                 <div>
-                    <h1>Would you<br />show up?</h1>
-                </div>
-                <div className="lab-intro-copy">
-                    <p>Five fictional pop-up ideas a day. Vote “I’d go” or “Skip.”</p>
+                    <h1>The next pop-up starts as a what if.</h1>
+                    <p className="lab-intro-copy">
+                        AI-generated brand concepts, rated by people who would actually go.
+                    </p>
                 </div>
             </section>
 
-            {error ? (
+            {error || voteData.error || hasIncompleteSet ? (
                 <section className="lab-setup" aria-labelledby="lab-setup-title">
-                    <h2 id="lab-setup-title">Daily Drop needs its database tables.</h2>
+                    <h2 id="lab-setup-title">Today’s concepts aren’t available.</h2>
                     <p>
-                        Run the included Supabase migration, then return here to reveal
-                        the first concept.
+                        {hasIncompleteSet
+                            ? "The shared set did not finish loading. Try again shortly."
+                            : "We couldn’t reach the concept archive. Refresh this page to try again."}
                     </p>
-                    <Link href="/">Return to Explore</Link>
+                    <div className="lab-setup-actions">
+                        <Link href="/lab">Try again</Link>
+                        <Link href="/">Return to Explore</Link>
+                    </div>
                 </section>
             ) : (
                 <DailyDropFeed
                     initialDrops={drops}
                     isAuthenticated
-                    initialRemainingGenerations={remainingGenerations}
+                    initialCanGenerate={drops.length === 0}
                 />
             )}
         </main>

@@ -41,7 +41,7 @@ export default function AuthNav({ initialIsAuthenticated }: AuthNavProps) {
     return (
         <nav className="site-nav" aria-label="Primary navigation">
             <Link href="/" aria-current={pathname === "/" ? "page" : undefined}>Explore</Link>
-            <Link href="/lab" aria-current={pathname === "/lab" ? "page" : undefined}>Daily Drop</Link>
+            <Link href="/lab" aria-current={pathname === "/lab" ? "page" : undefined}>What If NYC</Link>
             {isAuthenticated ? (
                 <>
                     <Link href="/saved" aria-current={pathname === "/saved" ? "page" : undefined}>Saved</Link>

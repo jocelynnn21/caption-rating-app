@@ -4,18 +4,22 @@ import { useState } from "react";
 
 type LoginFormProps = {
     next: string;
+    pendingSavePopupId?: number;
 };
 
-export default function LoginForm({ next }: LoginFormProps) {
+export default function LoginForm({ next, pendingSavePopupId }: LoginFormProps) {
     const [loading, setLoading] = useState(false);
 
     return (
         <form action="/auth/sign-in" method="get" onSubmit={() => setLoading(true)}>
             <input type="hidden" name="next" value={next} />
+            {pendingSavePopupId && (
+                <input type="hidden" name="save" value={pendingSavePopupId} />
+            )}
             <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full items-center justify-between border border-black bg-transparent px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.15em] transition-[scale,background-color,color] duration-150 ease-out hover:bg-black hover:text-[#f7f6f2] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex w-full items-center justify-between border border-foreground bg-transparent px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.15em] transition-[scale,background-color,color] duration-150 ease-out hover:bg-foreground hover:text-background active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40"
             >
                 <span>{loading ? "Connecting…" : "Continue with Google"}</span>
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">

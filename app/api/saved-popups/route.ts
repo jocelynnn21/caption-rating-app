@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { isSampleSalePopup } from "@/lib/popups";
 
 async function getRequestContext(request: Request) {
     const supabase = await createClient();
@@ -24,6 +25,28 @@ async function getRequestContext(request: Request) {
 export async function POST(request: Request) {
     const context = await getRequestContext(request);
     if ("error" in context) return context.error;
+
+    const { data: popup, error: popupError } = await context.supabase
+        .from("popups")
+        .select("id, name, source_url")
+        .eq("id", context.popupId)
+        .maybeSingle();
+
+    if (popupError) {
+        console.error("Could not validate pop-up before saving:", popupError);
+        return Response.json(
+            { error: "Could not check this pop-up. Try again." },
+            { status: 503 }
+        );
+    }
+
+    if (!popup || isSampleSalePopup(popup)) {
+        return Response.json(
+            { error: "This pop-up is no longer available to save." },
+            { status: 404 }
+        );
+    }
+
     const { error } = await context.supabase.from("saved_popups").upsert(
         { user_id: context.user.id, popup_id: context.popupId },
         { onConflict: "user_id,popup_id" }

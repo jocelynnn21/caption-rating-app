@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
     let authResponse = NextResponse.next({ request });
 
     const requestedNext = request.nextUrl.searchParams.get("next");
+    const requestedSave = request.nextUrl.searchParams.get("save");
     const referrer = request.headers.get("referer");
     const referrerNext = referrer
         ? new URL(referrer).searchParams.get("next")
@@ -13,6 +14,10 @@ export async function GET(request: NextRequest) {
         requestedNext ?? referrerNext ?? ""
     )
         ? requestedNext ?? referrerNext
+        : null;
+    const parsedSave = requestedSave ? Number(requestedSave) : NaN;
+    const pendingSavePopupId = Number.isSafeInteger(parsedSave) && parsedSave > 0
+        ? parsedSave
         : null;
 
     const supabase = createServerClient(
@@ -60,6 +65,16 @@ export async function GET(request: NextRequest) {
 
     if (next) {
         response.cookies.set("post_auth_redirect", next, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            path: "/",
+            maxAge: 600,
+        });
+    }
+
+    if (pendingSavePopupId) {
+        response.cookies.set("post_auth_save_popup", String(pendingSavePopupId), {
             httpOnly: true,
             sameSite: "lax",
             secure: process.env.NODE_ENV === "production",

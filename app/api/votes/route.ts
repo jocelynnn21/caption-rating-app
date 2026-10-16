@@ -37,17 +37,21 @@ export async function POST(request: Request) {
         );
     }
 
-    const { data: votes, error: countError } = await supabase
-        .from("votes")
-        .select("value")
-        .eq("generation_id", generationId);
+    const { data: summaries, error: countError } = await supabase.rpc(
+        "get_vote_summaries",
+        { generation_ids: [generationId] }
+    );
 
     if (countError) {
         console.error("Could not count votes:", countError);
+        return NextResponse.json({ saved: true, value });
     }
 
+    const summary = summaries?.[0];
     return NextResponse.json({
-        goCount: votes?.filter((vote) => vote.value === 1).length ?? 0,
-        skipCount: votes?.filter((vote) => vote.value === -1).length ?? 0,
+        saved: true,
+        value,
+        goCount: Number(summary?.go_count ?? 0),
+        skipCount: Number(summary?.skip_count ?? 0),
     });
 }
